@@ -178,15 +178,17 @@ def p_indice(p):
 
 def p_indice_error(p):
     """indice : ABRE_COLCHETE error FECHA_COLCHETE
+                | indice ABRE_COLCHETE error
                 | indice ABRE_COLCHETE error FECHA_COLCHETE
     """
-
-    print("Erro na definicao do indice. Expressao ou indice.")
+    print(error_handler.newError('ERR-SYN-INDICE'))
+    # print("Erro na definicao do indice. Expressao ou indice.")
 
     print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}, p[3]:{p3}".format(
         p0=p[0], p1=p[1], p2=p[2], p3=p[3]))
     error_line = p.lineno(2)
-    father = MyNode(name='ERROR::{}'.format(error_line), type='ERROR')
+    father = MyNode(name='ERR-SYN-INDICE'.format(error_line), type='ERROR')
+    # father = MyNode(name='ERROR::{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
     parser.errok()
@@ -269,6 +271,20 @@ def p_cabecalho_error(p):
                 | error ABRE_PARENTESE lista_parametros FECHA_PARENTESE corpo FIM 
     """
 
+    print(error_handler.newError('ERR-SYN-CABECALHO'))
+    
+    error_line = p.lineno(2)
+
+    pai = MyNode(name='ERR-SYN-CABECALHO'.format(error_line), type='ERROR')
+    
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+
+    parser.errok()
+
+    p[0] = pai
+
+
 def p_lista_parametros(p):
     """lista_parametros : lista_parametros VIRGULA parametro
                     | parametro
@@ -318,6 +334,24 @@ def p_parametro_error(p):
                 | parametro error FECHA_COLCHETE
                 | parametro ABRE_COLCHETE error
     """
+
+
+    print(error_handler.newError('ERR-SYN-PARAMETRO'))
+
+    if len(p) > 3:
+        print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}, p[3]:{p3}".format(
+            p0=p[0], p1=p[1], p2=p[2], p3=p[3]))
+    else:
+        print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}".format(
+            p0=p[0], p1=p[1], p2=p[2]))
+
+    error_line = p.lineno(2)
+    
+    pai = MyNode(name='ERR-SYN-PARAMETRO'.format(error_line), type='ERROR')
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+    parser.errok()
+    p[0] = pai
 
 
 def p_corpo(p):
@@ -402,6 +436,20 @@ def p_se_error(p):
     """
 
 
+    print(error_handler.newError('ERR-SYN-SE'))
+    
+    error_line = p.lineno(2)
+    
+    pai = MyNode(name='ERR-SYN-SE'.format(error_line), type='ERROR')
+    
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+
+    parser.errok()
+
+    p[0] = pai
+
+
 def p_repita(p):
     """repita : REPITA corpo ATE expressao"""
 
@@ -425,6 +473,21 @@ def p_repita_error(p):
     """repita : error corpo ATE expressao
             | REPITA corpo error expressao
     """
+
+
+    print(error_handler.newError('ERR-SYN-REPITA'))
+    
+    error_line = p.lineno(2)
+
+    pai = MyNode(name='ERR-SYN-REPITA'.format(error_line), type='ERROR')
+    
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+
+    parser.errok()
+
+    p[0] = pai
+
 
 def p_atribuicao(p):
     """atribuicao : var ATRIBUICAO expressao"""
@@ -465,6 +528,21 @@ def p_leia(p):
 def p_leia_error(p):
     """leia : LEIA ABRE_PARENTESE error FECHA_PARENTESE
     """
+
+
+    print(error_handler.newError('ERR-SYN-LEIA'))
+
+    
+    error_line = p.lineno(2)
+
+    pai = MyNode(name='ERR-SYN-LEIA'.format(error_line), type='ERROR')
+    
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+
+    parser.errok()
+
+    p[0] = pai
 
 
 def p_escreva(p):
@@ -713,7 +791,22 @@ def p_fator(p):
 def p_fator_error(p):
     """fator : ABRE_PARENTESE error FECHA_PARENTESE
         """
-ERR-SYN-FATOR
+
+
+    print(error_handler.newError('ERR-SYN-FATOR'))
+
+    
+    error_line = p.lineno(2)
+
+    pai = MyNode(name='ERR-SYN-FATOR'.format(error_line), type='ERROR')
+    
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+
+    parser.errok()
+
+    p[0] = pai
+
 
 def p_numero(p):
     """numero : NUM_INTEIRO
@@ -784,9 +877,7 @@ def p_lista_argumentos(p):
 
 def p_lista_argumentos_error(p):
     """lista_argumentos : error VIRGULA expressao
-                    | expressao
-                    | vazio
-        """
+    """
     # error_handler.newError('ERR-SYN-LISTA-ARGUMENTOS')
 
 
@@ -805,6 +896,44 @@ def p_error(p):
             line=token.lineno, column=token.lineno, token=token.value))
 
 # Programa principal.
+# def main():
+#     aux = argv[1].split('.')
+
+#     # verifica se o arquivo passado tem extensão .tpp
+#     if aux[-1] != 'tpp':
+#       raise IOError("Not a .tpp file!")
+    
+#     # pega o nome do arquivo passado por argumento
+#     data = open(argv[1])
+    
+#     # pega o conteúdo do arquivo com extensão .tpp
+#     source_file = data.read()
+
+#     # alimenta o parser com o código para o lexer
+#     parser.parse(source_file)
+
+#     if root and root.children != ():
+#         print("Gerando grafo da Árvore Sintática...")
+        
+#         DotExporter(root).to_picture(argv[1] + ".ast.png")
+#         UniqueDotExporter(root).to_picture(argv[1] + ".unique.ast.png")
+#         DotExporter(root).to_dotfile(argv[1] + ".ast.dot")
+#         UniqueDotExporter(root).to_dotfile(argv[1] + ".unique.ast.dot")
+    
+#         print(RenderTree(root, style=AsciiStyle()).by_attr())
+#         print("Grafo foi gerado.\nArquivo de saída: " + argv[1] + ".ast.png")
+        
+#         DotExporter(root, graph="graph",
+#             nodenamefunc=MyNode.nodenamefunc,
+#             nodeattrfunc=lambda node: 'label=%s' % (node.type),
+#             edgeattrfunc=MyNode.edgeattrfunc,
+#             edgetypefunc=MyNode.edgetypefunc).to_picture(argv[1] + ".ast2.png")
+
+
+#     else:
+#         print("Incapaz de gerar a Árvore Sintática.")
+        
+#     print('\n\n')
 
 # Build the parser.
 parser = yacc.yacc(method="LALR", optimize=True, start='programa', debug=True,

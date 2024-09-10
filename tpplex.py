@@ -16,6 +16,9 @@ log = logging.getLogger()
 
 le = MyError('LexerErrors')
 
+check_tpp = False
+check_key = False
+
 tokens = [
     "ID",  # identificador
     # numerais
@@ -170,8 +173,8 @@ def t_error(token):
 
     # file = token.lexer.filename
     line = token.lineno
-    # column = define_column(token.lexer.backup_data, token.lexpos)
-    message = le.newError('ERR-LEX-INV-CHAR', valor=token.value[0])
+    column = define_column(token.lexer.lexdata, token.lexpos)
+    message = le.newError(check_key, 'ERR-LEX-INV-CHAR', token.lineno, column, valor=token.value[0])
     # print(f"[{file}]:[{line},{column}]: {message}.")
     print(message)
 
@@ -182,16 +185,33 @@ def t_error(token):
 
 def main():
 
-    if(len(sys.argv) < 2):
-        raise TypeError(le.newError('ERR-LEX-USE'))
+    global check_tpp
+    global check_key
 
-    aux = argv[1].split('.')
-    if aux[-1] != 'tpp':
-      raise IOError(le.newError('ERR-LEX-NOT-TPP'))
-    elif not os.path.exists(argv[1]):
-        raise IOError(le.newError('ERR-LEX-FILE-NOT-EXISTS'))
+    check_ttp = False
+    check_key = False
+    
+    for idx, arg in enumerate(sys.argv):
+        # print("Argument #{} is {}".format(idx, arg))
+        aux = arg.split('.')
+        if aux[-1] == 'tpp':
+            check_tpp = True
+            idx_tpp = idx
+
+        if(arg == "-k"):
+            check_key = True
+
+    # print ("No. of arguments passed is ", len(sys.argv))
+
+    if(len(sys.argv) < 3):
+        raise TypeError(le.newError(check_key, 'ERR-LEX-USE'))
+
+    if not check_tpp:
+      raise IOError(le.newError(check_key, 'ERR-LEX-NOT-TPP'))
+    elif not os.path.exists(argv[idx_tpp]):
+        raise IOError(le.newError(check_key, 'ERR-LEX-FILE-NOT-EXISTS'))
     else:
-        data = open(argv[1])
+        data = open(argv[idx_tpp])
 
         source_file = data.read()
         lexer.input(source_file)
@@ -232,4 +252,3 @@ if __name__ == "__main__":
         print(e)
     except (ValueError, TypeError):
         print(e)
-
