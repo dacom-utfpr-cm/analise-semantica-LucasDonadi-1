@@ -16,8 +16,25 @@ class MyError():
       message = self.config.get(self.errorType, key)
     if(data):
       for key, value in data.items():
-        message = message + ", " f"{key}: {value}"
-
+        match len(value):
+          case 1:
+            message = message.format(value[0])
+            
+          case 2:
+            message = message.format(value[0], value[1])
+            
+          case 3:
+            message = message.format(value[0], value[1], value[2])
+            
+          case 4:
+            message = message.format(value[0], value[1], value[2], value[3])
+            
+          case 5:
+            message = message.format(value[0], value[1], value[2], value[3], value[4])
+            
+          case _:
+            message = message.format(value)
+            
     return message
     #print(message)
     #frame = inspect.stack()[1][0]

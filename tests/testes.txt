@@ -1,0 +1,6 @@
+testes que nao rodam:
+    - sema12.tpp
+    - sema17.tpp
+    - sema18.tpp
+    - sema19.tpp
+    - sema20.tpp

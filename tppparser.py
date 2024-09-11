@@ -3,31 +3,167 @@ import os
 
 from sys import argv, exit
 
+from symbols_table import SymbolsTable
+from symbols_func_table import SymbolsFuncTable
 import logging
 
 logging.basicConfig(
-     level = logging.DEBUG,
-     filename = "parser.log",
-     filemode = "w",
-     format = "%(filename)10s:%(lineno)4d:%(message)s"
+    level=logging.DEBUG,
+    filename="parser.log",
+    filemode="w",
+    format="%(filename)10s:%(lineno)4d:%(message)s"
 )
 log = logging.getLogger()
 
-
 import ply.yacc as yacc
- 
+
 # Get the token map from the lexer.  This is required.
 from tpplex import tokens
 
 from mytree import MyNode
 from anytree.exporter import DotExporter, UniqueDotExporter
-from anytree import RenderTree, AsciiStyle
+from anytree import RenderTree, AsciiStyle, PreOrderIter
 
 from myerror import MyError
 
 error_handler = MyError('ParserErrors')
 
 root = None
+
+symbol_table = SymbolsTable()
+symbol_func_table = SymbolsFuncTable()
+
+
+# def get_function(no):
+    # pass
+    # print(no.name)
+    # aux = no.parent
+    # print(aux)
+    # while aux.name != 'programa':
+    #     if aux.name == 'declaracao_funcao':
+    #         print(aux.children[1].children[0].name)
+    #         break
+    #     aux = aux.parent
+
+def get_params(no):
+    params = list()
+    for i in PreOrderIter(no):
+        if i.name == 'parametro':
+            params.append(i)
+
+    params_list = list()
+    for i in params:
+        tipo = return_leaf(i.children[0]).name
+        nome = return_leaf(i.children[2]).name
+        params_list.append([tipo, nome])
+
+    return params_list
+
+
+def return_leaf(no):
+    
+    for node in no.descendants:
+        if node.is_leaf:
+            return node
+        
+    # node = [node for node in no.descendants if node.is_leaf]
+    # # print(len(node))
+    # for i in node:
+    #     print(i.name)
+    # [print(i.name) for i in node]
+
+    # return node
+    
+
+def find_return(no):
+    while len(no.children) == 2:
+        if no.children[1].children[0].name == 'retorna':
+            return return_leaf(no.children[1].children[0].children[-2]).name
+
+        no = no.children[0]
+    
+    return ''
+
+
+def add_symbol(no):
+    tipo = return_leaf(no[1]).name
+    dois_pontos = return_leaf(no[2]).name
+    
+    # ====================================================
+    # erro de variavel ja declarada, no parser ou sema?
+    # ====================================================
+
+    if len(no[3].children[0].children) != 1:
+        var = no[3].children[0].children
+        
+        var_name = return_leaf(var[0]).name
+        
+        check_var_exist = symbol_table.var_name_exists(var_name)
+        
+        if len(var[1].children) == 3:
+            indice = return_leaf(var[1].children[1]).name
+            if check_var_exist == '':
+                symbol_table.add("VAR", var_name, tipo, 1, indice, 0, '', 'N', 'N', no.lineno(2))
+            else:
+                symbol_table.errors.append(['WAR-SEM-VAR-DECL-PREV', var_name, check_var_exist])
+            
+            
+        elif len(var[1].children) == 4:
+            indice_1 = return_leaf(var[1].children[0].children[1]).name
+            indice_2 = return_leaf(var[1].children[2]).name
+            if check_var_exist == '':
+                symbol_table.add("VAR", var_name, tipo, 2, indice_1, indice_2, '', 'N', 'N', no.lineno(2))
+            else:
+                symbol_table.errors.append(['WAR-SEM-VAR-DECL-PREV', var_name, check_var_exist])
+
+    else:
+        var_name = return_leaf(no[3]).name
+        check_var_exist = symbol_table.var_name_exists(var_name)
+        
+        if check_var_exist == '':
+            symbol_table.add("VAR", var_name, tipo, 0, 1, 0, '', 'N', 'N', no.lineno(2))
+        else:
+            symbol_table.errors.append(['WAR-SEM-VAR-DECL-PREV', var_name, check_var_exist])
+            
+
+def add_func(no):
+    if len(no[0].children) == 2:
+        tipo = return_leaf(no[0].children[0]).name
+        nome_func = return_leaf(no[0].children[1].children[0]).name
+
+        lista_params = no[0].children[1].children[2]
+        params = get_params(lista_params)
+
+        corpo = no[0].children[1].children[-2]
+        var_retorno = find_return(corpo)
+
+        if nome_func == 'principal':
+            symbol_func_table.add(tipo, nome_func, len(params), params, var_retorno, 'S')
+        else:
+            symbol_func_table.add(tipo, nome_func, len(params), params, var_retorno, 'N')
+        # symbol_func_table.add(tipo, nome_func, len(params), params, no.lineno(2))
+
+    else:
+        tipo = 'vazio'
+        nome_func = return_leaf(no[0].children[0].children[0]).name
+
+        lista_params = no[0].children[0].children[2]
+        params = get_params(lista_params)
+
+        corpo = no[0].children[0].children[-2]
+        var_retorno = find_return(corpo)
+
+        if nome_func == 'principal':
+            symbol_func_table.add(tipo, nome_func, len(params), params, var_retorno, 'S')
+        else:
+            symbol_func_table.add(tipo, nome_func, len(params), params, var_retorno, 'N')
+
+
+
+    # if len(no[0])
+    # for i in no:
+    #     print(i.name)
+        
 
 # Sub-árvore.
 #       (programa)
@@ -47,6 +183,7 @@ def p_programa(p):
     p[0] = programa
     p[1].parent = programa
 
+
 #    (lista_declaracoes)                          (lista_declaracoes)
 #          /           \                                    |
 # (lista_declaracoes)  (declaracao)                    (declaracao)
@@ -62,6 +199,7 @@ def p_lista_declaracoes(p):
 
     if len(p) > 2:
         p[2].parent = pai
+
 
 # Sub-árvore.
 #      (declaracao)
@@ -80,6 +218,7 @@ def p_declaracao(p):
     p[0] = pai
     p[1].parent = pai
 
+
 # Sub-árvore.
 #      (declaracao_variaveis)
 #      / p[1]    |           \
@@ -91,6 +230,8 @@ def p_declaracao(p):
 def p_declaracao_variaveis(p):
     """declaracao_variaveis : tipo DOIS_PONTOS lista_variaveis"""
 
+    # print("DECLARACAO DE VARIAVEIS")
+
     pai = MyNode(name='declaracao_variaveis', type='DECLARACAO_VARIAVEIS')
     p[0] = pai
 
@@ -101,6 +242,26 @@ def p_declaracao_variaveis(p):
     p[2] = filho
 
     p[3].parent = pai
+    # print(p.lineno(2))
+
+    add_symbol(p)
+
+
+def p_declaracao_variaveis_error(p):
+    """ declaracao_variaveis : error DOIS_PONTOS lista_variaveis
+                            | tipo error lista_variaveis 
+                            | tipo DOIS_PONTOS error
+    """
+
+    print(error_handler.newError('ERR-SYN-DECLARACAO-VARIAVEIS'))
+
+    error_line = p.lineno(2)
+    father = MyNode(name='ERR-SYN-DECLARACAO-VARIAVEIS:{}'.format(error_line), type='ERROR')
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+    parser.errok()
+    p[0] = father
+
 
 # Sub-árvore.
 #   (inicializacao_variaveis)
@@ -129,7 +290,7 @@ def p_lista_variaveis(p):
         filho_sym = MyNode(name=',', type='SIMBOLO', parent=filho)
         p[3].parent = pai
     else:
-       p[1].parent = pai
+        p[1].parent = pai
 
 
 def p_var(p):
@@ -153,7 +314,7 @@ def p_indice(p):
     pai = MyNode(name='indice', type='INDICE')
     p[0] = pai
     if len(p) == 5:
-        p[1].parent = pai   # indice
+        p[1].parent = pai  # indice
 
         filho2 = MyNode(name='abre_colchete', type='ABRE_COLCHETE', parent=pai)
         filho_sym2 = MyNode(name=p[2], type='SIMBOLO', parent=filho2)
@@ -181,18 +342,16 @@ def p_indice_error(p):
                 | indice ABRE_COLCHETE error
                 | indice ABRE_COLCHETE error FECHA_COLCHETE
     """
-    print(error_handler.newError('ERR-SYN-INDICE'))
-    # print("Erro na definicao do indice. Expressao ou indice.")
 
-    print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}, p[3]:{p3}".format(
-        p0=p[0], p1=p[1], p2=p[2], p3=p[3]))
+    print(error_handler.newError('ERR-SYN-INDICE'))
+
     error_line = p.lineno(2)
-    father = MyNode(name='ERR-SYN-INDICE'.format(error_line), type='ERROR')
-    # father = MyNode(name='ERROR::{}'.format(error_line), type='ERROR')
+    father = MyNode(name='ERR-SYN-INDICE:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
     parser.errok()
     p[0] = father
+
     # if len(p) == 4:
     #     p[1] = new_node('ABRECOLCHETES', father)
     #     p[2].parent = father
@@ -230,12 +389,51 @@ def p_declaracao_funcao(p):
     """declaracao_funcao : tipo cabecalho 
                         | cabecalho 
     """
+    # print(type(p[0]))
+    # print("DECLARACAO DE FUNCAO")
+
     pai = MyNode(name='declaracao_funcao', type='DECLARACAO_FUNCAO')
     p[0] = pai
     p[1].parent = pai
 
     if len(p) == 3:
         p[2].parent = pai
+
+    add_func(p)
+
+    # return_leaf(p[0])
+    # leaf_nodes = return_leaf(p[0])
+    # [print(i.name) for i in leaf_nodes]
+    # print("TERMINOU ===================== \n")
+
+    # print(leaf_nodes)
+    # if len(leaf_nodes) == 3:
+    #             #     symbol_table.add('id', leaf_nodes[2].name, leaf_nodes[0].name, 0, 1, 0, 'global', False, 1)
+    #             # if len(leaf_nodes) == 6:
+    #             #     symbol_table.add('id', leaf_nodes[2].name, leaf_nodes[0].name, 1, leaf_nodes[4].name, 0, 'global', False, 1)
+    #             # if len(leaf_nodes) == 9:
+    #             #     symbol_table.add('id', leaf_nodes[2].name, leaf_nodes[0].name, 2, leaf_nodes[4].name, leaf_nodes[7].name, 'global', False, 1)
+    #         if node.name == 'declaracao_funcao':
+    #             # print('dec_function')
+    #             leaf_nodes = return_leaf(node)
+    #             for i in leaf_nodes:
+    #                 print(i.name)
+
+
+def p_declaracao_funcao_error(p):
+    """declaracao_funcao : error cabecalho 
+                        | tipo error
+                        | error
+    """
+
+    print(error_handler.newError('ERR-SYN-DECLARACAO-FUNCAO'))
+
+    error_line = p.lineno(2)
+    father = MyNode(name='ERR-SYN-DECLARACAO-FUNCAO:{}'.format(error_line), type='ERROR')
+    logging.error(
+        "Syntax error parsing index rule at line {}".format(error_line))
+    parser.errok()
+    p[0] = father
 
 
 def p_cabecalho(p):
@@ -268,21 +466,18 @@ def p_cabecalho(p):
 def p_cabecalho_error(p):
     """cabecalho : ID ABRE_PARENTESE error FECHA_PARENTESE corpo FIM
                 | ID ABRE_PARENTESE lista_parametros FECHA_PARENTESE error FIM
-                | error ABRE_PARENTESE lista_parametros FECHA_PARENTESE corpo FIM 
+                | error ABRE_PARENTESE lista_parametros FECHA_PARENTESE corpo FIM
+                | ID ABRE_PARENTESE lista_parametros FECHA_PARENTESE corpo 
     """
 
     print(error_handler.newError('ERR-SYN-CABECALHO'))
     
     error_line = p.lineno(2)
-
-    pai = MyNode(name='ERR-SYN-CABECALHO'.format(error_line), type='ERROR')
-    
+    father = MyNode(name='ERR-SYN-CABECALHO:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
-
     parser.errok()
-
-    p[0] = pai
+    p[0] = father
 
 
 def p_lista_parametros(p):
@@ -335,23 +530,13 @@ def p_parametro_error(p):
                 | parametro ABRE_COLCHETE error
     """
 
-
     print(error_handler.newError('ERR-SYN-PARAMETRO'))
-
-    if len(p) > 3:
-        print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}, p[3]:{p3}".format(
-            p0=p[0], p1=p[1], p2=p[2], p3=p[3]))
-    else:
-        print("Erro:p[0]:{p0}, p[1]:{p1}, p[2]:{p2}".format(
-            p0=p[0], p1=p[1], p2=p[2]))
-
     error_line = p.lineno(2)
-    
-    pai = MyNode(name='ERR-SYN-PARAMETRO'.format(error_line), type='ERROR')
+    father = MyNode(name='ERR-SYN-PARAMETRO:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
     parser.errok()
-    p[0] = pai
+    p[0] = father
 
 
 def p_corpo(p):
@@ -379,7 +564,6 @@ def p_acao(p):
     pai = MyNode(name='acao', type='ACAO')
     p[0] = pai
     p[1].parent = pai
-
 
 
 # Sub-árvore:
@@ -432,22 +616,17 @@ def p_se_error(p):
         | error expressao ENTAO corpo SENAO corpo FIM
         | SE expressao error corpo SENAO corpo FIM
         | SE expressao ENTAO corpo error corpo FIM
-        | SE expressao ENTAO corpo SENAO corpo
+        | SE expressao ENTAO corpo SENAO corpo 
     """
 
+    print(error_handler.newError('ERR-SYN-CONDICIONAL'))
 
-    print(error_handler.newError('ERR-SYN-SE'))
-    
     error_line = p.lineno(2)
-    
-    pai = MyNode(name='ERR-SYN-SE'.format(error_line), type='ERROR')
-    
+    father = MyNode(name='ERR-SYN-CONDICIONAL:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
-
     parser.errok()
-
-    p[0] = pai
+    p[0] = father
 
 
 def p_repita(p):
@@ -466,7 +645,7 @@ def p_repita(p):
     filho_ate = MyNode(name=p[3], type='ATE', parent=filho3)
     p[3] = filho3
 
-    p[4].parent = pai   # expressao.
+    p[4].parent = pai  # expressao.
 
 
 def p_repita_error(p):
@@ -474,19 +653,14 @@ def p_repita_error(p):
             | REPITA corpo error expressao
     """
 
-
     print(error_handler.newError('ERR-SYN-REPITA'))
-    
-    error_line = p.lineno(2)
 
-    pai = MyNode(name='ERR-SYN-REPITA'.format(error_line), type='ERROR')
-    
+    error_line = p.lineno(2)
+    father = MyNode(name='ERR-SYN-REPITA:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
-
     parser.errok()
-
-    p[0] = pai
+    p[0] = father
 
 
 def p_atribuicao(p):
@@ -529,20 +703,14 @@ def p_leia_error(p):
     """leia : LEIA ABRE_PARENTESE error FECHA_PARENTESE
     """
 
-
     print(error_handler.newError('ERR-SYN-LEIA'))
 
-    
     error_line = p.lineno(2)
-
-    pai = MyNode(name='ERR-SYN-LEIA'.format(error_line), type='ERROR')
-    
+    father = MyNode(name='ERR-SYN-LEIA:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
-
     parser.errok()
-
-    p[0] = pai
+    p[0] = father
 
 
 def p_escreva(p):
@@ -642,8 +810,7 @@ def p_expressao_multiplicativa(p):
                                | expressao_multiplicativa operador_multiplicacao expressao_unaria
         """
 
-    pai = MyNode(name='expressao_multiplicativa',
-                 type='EXPRESSAO_MULTIPLICATIVA')
+    pai = MyNode(name='expressao_multiplicativa', type='EXPRESSAO_MULTIPLICATIVA')
     p[0] = pai
     p[1].parent = pai
 
@@ -718,10 +885,10 @@ def p_operador_soma(p):
         p[0] = MyNode(name='operador_soma',
                       type='OPERADOR_SOMA', children=[mais])
     else:
-       menos = MyNode(name='MENOS', type='MENOS')
-       menos_lexema = MyNode(name='-', type='SIMBOLO', parent=menos)
-       p[0] = MyNode(name='operador_soma',
-                     type='OPERADOR_SOMA', children=[menos])
+        menos = MyNode(name='MENOS', type='MENOS')
+        menos_lexema = MyNode(name='-', type='SIMBOLO', parent=menos)
+        p[0] = MyNode(name='operador_soma',
+                      type='OPERADOR_SOMA', children=[menos])
 
 
 def p_operador_logico(p):
@@ -760,10 +927,10 @@ def p_operador_multiplicacao(p):
         p[0] = MyNode(name='operador_multiplicacao',
                       type='OPERADOR_MULTIPLICACAO', children=[filho])
     else:
-       divide = MyNode(name='DIVIDE', type='DIVIDE')
-       divide_lexema = MyNode(name=p[1], type='SIMBOLO', parent=divide)
-       p[0] = MyNode(name='operador_multiplicacao',
-                     type='OPERADOR_MULTIPLICACAO', children=[divide])
+        divide = MyNode(name='DIVIDE', type='DIVIDE')
+        divide_lexema = MyNode(name=p[1], type='SIMBOLO', parent=divide)
+        p[0] = MyNode(name='operador_multiplicacao',
+                      type='OPERADOR_MULTIPLICACAO', children=[divide])
 
 
 def p_fator(p):
@@ -792,21 +959,17 @@ def p_fator_error(p):
     """fator : ABRE_PARENTESE error FECHA_PARENTESE
         """
 
+    error_handler.newError('ERR-SYN-FATOR')
 
-    print(error_handler.newError('ERR-SYN-FATOR'))
-
-    
     error_line = p.lineno(2)
-
-    pai = MyNode(name='ERR-SYN-FATOR'.format(error_line), type='ERROR')
-    
+    father = MyNode(name='ERR-SYN-FATOR:{}'.format(error_line), type='ERROR')
     logging.error(
         "Syntax error parsing index rule at line {}".format(error_line))
-
     parser.errok()
+    p[0] = father
 
-    p[0] = pai
 
+# ERR-SYN-FATOR
 
 def p_numero(p):
     """numero : NUM_INTEIRO
@@ -875,10 +1038,13 @@ def p_lista_argumentos(p):
     else:
         p[1].parent = pai
 
-def p_lista_argumentos_error(p):
-    """lista_argumentos : error VIRGULA expressao
-    """
-    # error_handler.newError('ERR-SYN-LISTA-ARGUMENTOS')
+
+# def p_lista_argumentos_error(p):
+#     """lista_argumentos : error VIRGULA expressao
+#                     | expressao
+#                     | vazio
+#         """
+#     # error_handler.newError('ERR-SYN-LISTA-ARGUMENTOS')
 
 
 def p_vazio(p):
@@ -889,63 +1055,26 @@ def p_vazio(p):
 
 
 def p_error(p):
-
     if p:
         token = p
         print("Erro:[{line},{column}]: Erro próximo ao token '{token}'".format(
             line=token.lineno, column=token.lineno, token=token.value))
 
+
 # Programa principal.
-# def main():
-#     aux = argv[1].split('.')
-
-#     # verifica se o arquivo passado tem extensão .tpp
-#     if aux[-1] != 'tpp':
-#       raise IOError("Not a .tpp file!")
-    
-#     # pega o nome do arquivo passado por argumento
-#     data = open(argv[1])
-    
-#     # pega o conteúdo do arquivo com extensão .tpp
-#     source_file = data.read()
-
-#     # alimenta o parser com o código para o lexer
-#     parser.parse(source_file)
-
-#     if root and root.children != ():
-#         print("Gerando grafo da Árvore Sintática...")
-        
-#         DotExporter(root).to_picture(argv[1] + ".ast.png")
-#         UniqueDotExporter(root).to_picture(argv[1] + ".unique.ast.png")
-#         DotExporter(root).to_dotfile(argv[1] + ".ast.dot")
-#         UniqueDotExporter(root).to_dotfile(argv[1] + ".unique.ast.dot")
-    
-#         print(RenderTree(root, style=AsciiStyle()).by_attr())
-#         print("Grafo foi gerado.\nArquivo de saída: " + argv[1] + ".ast.png")
-        
-#         DotExporter(root, graph="graph",
-#             nodenamefunc=MyNode.nodenamefunc,
-#             nodeattrfunc=lambda node: 'label=%s' % (node.type),
-#             edgeattrfunc=MyNode.edgeattrfunc,
-#             edgetypefunc=MyNode.edgetypefunc).to_picture(argv[1] + ".ast2.png")
-
-
-#     else:
-#         print("Incapaz de gerar a Árvore Sintática.")
-        
-#     print('\n\n')
 
 # Build the parser.
 parser = yacc.yacc(method="LALR", optimize=True, start='programa', debug=True,
                    debuglog=log, write_tables=False, tabmodule='tpp_parser_tab')
 
-if __name__ == "__main__":
-    if(len(sys.argv) < 2):
+
+def main():
+    if len(sys.argv) < 2:
         raise TypeError(error_handler.newError('ERR-SYN-USE'))
 
     aux = argv[1].split('.')
     if aux[-1] != 'tpp':
-      raise IOError(error_handler.newError('ERR-SYN-NOT-TPP'))
+        raise IOError(error_handler.newError('ERR-SYN-NOT-TPP'))
     elif not os.path.exists(argv[1]):
         raise IOError(error_handler.newError('ERR-SYN-FILE-NOT-EXISTS'))
     else:
@@ -954,13 +1083,13 @@ if __name__ == "__main__":
         parser.parse(source_file)
 
     if root and root.children != ():
-        print("Generating Syntax Tree Graph...")
+        # print("Generating Syntax Tree Graph...")
         # DotExporter(root).to_picture(argv[1] + ".ast.png")
         UniqueDotExporter(root).to_picture(argv[1] + ".unique.ast.png")
-        DotExporter(root).to_dotfile(argv[1] + ".ast.dot")
-        UniqueDotExporter(root).to_dotfile(argv[1] + ".unique.ast.dot")
-        print(RenderTree(root, style=AsciiStyle()).by_attr())
-        print("Graph was generated.\nOutput file: " + argv[1] + ".ast.png")
+        # DotExporter(root).to_dotfile(argv[1] + ".ast.dot")
+        # UniqueDotExporter(root).to_dotfile(argv[1] + ".unique.ast.dot")
+        # print(RenderTree(root, style=AsciiStyle()).by_attr())
+        # print("Graph was generated.\nOutput file: " + argv[1] + ".ast.png")
 
         # DotExporter(root, graph="graph",
         #            nodenamefunc=MyNode.nodenamefunc,
@@ -972,4 +1101,9 @@ if __name__ == "__main__":
 
     else:
         print(error_handler.newError('WAR-SYN-NOT-GEN-SYN-TREE'))
-    print('\n\n')
+
+    return root, symbol_table, symbol_func_table
+
+
+if __name__ == "__main__":
+    main()
